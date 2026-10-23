@@ -1,6 +1,6 @@
-// The agent under test: same system prompt, model and tool schemas as the Kapso
-// AI Agent node (workflow "Image", 2026-10-23). This replays the model's side of
-// that node; it does not run Kapso's runtime.
+// The agent under test: same system prompt, model and tool schemas as the
+// WhatsApp agent it was tested in. This replays the model's side only; it does
+// not run any agent platform's runtime.
 export const MODEL = "claude-sonnet-5-5";
 export const EFFORT = "high";
 

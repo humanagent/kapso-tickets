@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quick Images MCP</title>
-<meta name="description" content="Quick Images MCP: a WhatsApp agent sends data, gets back an image (tickets, charts) to send in the chat. A prototype, not an official Kapso product.">
+<meta name="description" content="Quick Images MCP: a WhatsApp agent sends data, gets back an image (tickets, charts) to send in the chat. A prototype MCP server for WhatsApp agents.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -192,7 +192,7 @@
     </div>
 
     <div class="copy">
-      <span class="pill"><b>Prototype</b><span class="sep"></span>Built on Kapso Agent UI skills</span>
+      <span class="pill"><b>Prototype</b><span class="sep"></span>An MCP server for WhatsApp agents</span>
       <h1>Images your agent<span class="gray">can send.</span></h1>
       <p class="lede">Your WhatsApp agent sends data and gets back an image for the chat, in one tool call: a ticket for a customer, a sales chart for the owner. The model writes the data. Templates draw it and the math is done in code.</p>
       <div class="cta">
@@ -223,15 +223,15 @@
 <section id="how">
   <div class="wrap">
     <div class="eyebrow">How it works</div>
-    <h2>One tool. <span class="gray">Plugs into the image skill you already have.</span></h2>
-    <p class="sub">Kapso agent nodes can already send images through UI skills, but the image has to exist at a URL first. This fills that gap: the agent generates the image from the conversation.</p>
+    <h2>One tool call. <span class="gray">An image message comes out.</span></h2>
+    <p class="sub">WhatsApp agents can already send images, but the image has to exist at a URL first. This fills that gap: the agent generates the image from the conversation.</p>
     <div class="steps">
       <div class="step"><div class="n">01</div><h3>The agent collects the order</h3><p>Store, items, quantities, prices, payment method. Whatever the conversation already has.</p></div>
       <div class="step"><div class="n">02</div><h3>It calls <code>render_ticket</code></h3><p><code>POST /tickets</code> validates the order, computes subtotal, discount, IVA and total, and returns an <code>image_url</code>.</p></div>
-      <div class="step"><div class="n">03</div><h3>The image skill sends it</h3><p>The URL goes straight into the <code>image</code> UI skill. The customer gets a receipt, not a wall of text.</p></div>
+      <div class="step"><div class="n">03</div><h3>The agent sends it as an image</h3><p>The URL goes straight into an image message. The customer gets a receipt, not a wall of text.</p></div>
     </div>
     <div class="diagram">
-      <svg viewBox="0 0 1100 600" role="img" aria-label="Sequence: customer asks on WhatsApp, Kapso agent calls the tickets service, gets an image URL, sends it with the image skill, WhatsApp fetches the PNG">
+      <svg viewBox="0 0 1100 600" role="img" aria-label="Sequence: customer asks on WhatsApp, the agent calls the tickets service, gets an image URL, sends it as an image message, WhatsApp fetches the PNG">
         <defs>
           <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a1a1aa"/></marker>
           <marker id="ahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#22c55e"/></marker>
@@ -244,7 +244,7 @@
             <rect x="295" y="20" width="170" height="54" rx="10" fill="#161616" stroke="#2a2a2a"/>
             <text x="380" y="44" font-weight="600">WhatsApp</text><text x="380" y="62" font-size="12" fill="#71717a">Meta Cloud API</text>
             <rect x="565" y="20" width="190" height="54" rx="10" fill="#0f1f15" stroke="#22c55e"/>
-            <text x="660" y="44" font-weight="600">Kapso agent node</text><text x="660" y="62" font-size="12" fill="#71717a">LLM + UI skills</text>
+            <text x="660" y="44" font-weight="600">WhatsApp agent</text><text x="660" y="62" font-size="12" fill="#71717a">LLM + tools</text>
             <rect x="855" y="20" width="200" height="54" rx="10" fill="#161616" stroke="#2a2a2a"/>
             <text x="955" y="44" font-weight="600">Tickets service</text><text x="955" y="62" font-size="12" fill="#71717a">Cloudflare Worker</text>
           </g>
@@ -269,7 +269,7 @@
             <text x="520" y="153">webhook: new message</text>
             <text x="805" y="243" fill="#22c55e">tool render_ticket → POST /tickets</text>
             <text x="805" y="323" fill="#22c55e">{ image_url, totals }</text>
-            <text x="520" y="368">send_ui_ticket(image_url)</text>
+            <text x="520" y="368">send image(image_url)</text>
             <text x="665" y="413">GET /t/&lt;ticket&gt;.png</text>
             <text x="665" y="493">PNG, cached forever</text>
             <text x="245" y="543">receipt image in the chat</text>
@@ -328,8 +328,8 @@
   }
 }
 
-<span class="c">// then, in the agent node:</span>
-<span class="k">send_ui_ticket</span>({ image_url, caption: <span class="s">"Tu ticket 👇"</span> })</pre>
+<span class="c">// then, in the agent:</span>
+<span class="k">send_image</span>({ image_url, caption: <span class="s">"Tu ticket 👇"</span> })</pre>
       </div>
     </div>
   </div>
@@ -338,12 +338,12 @@
 <section id="install">
   <div class="wrap">
     <div class="eyebrow">Install</div>
-    <h2>Add it to your Kapso agent. <span class="gray">One URL, no API key.</span></h2>
-    <p class="sub">In the AI Agent node: add the MCP server, two image skills and one line of prompt. New to Kapso? Create a workflow with a WhatsApp trigger (the <a href="https://docs.kapso.ai/docs/how-to/whatsapp/use-sandbox-for-testing" target="_blank" rel="noopener" style="color:var(--green)">sandbox number</a> works) and add an AI Agent node first.</p>
+    <h2>Add it to your agent. <span class="gray">One URL, no API key.</span></h2>
+    <p class="sub">Any agent that speaks MCP: add the server, send the result as an image, add one line of prompt.</p>
     <div class="install rows">
-      <div class="inst step-row"><div class="step-side"><div class="n">01</div><h3>Add MCP Server</h3><p class="hint">In the AI Agent node. Headers stay empty; Test Connection lists <code>render_ticket</code> and <code>render_chart</code> with their schemas.</p></div><div class="step-fields"><div class="field"><div class="field-head"><span>Name</span><button class="copy-btn" type="button">Copy</button></div><code>Quick Images MCP</code></div><div class="field"><div class="field-head"><span>Server URL</span><button class="copy-btn" type="button">Copy</button></div><code>https://quick-images-mcp.fguespe.workers.dev/mcp</code></div></div></div>
-      <div class="inst step-row"><div class="step-side"><div class="n">02</div><h3>UI skills, format Image</h3><p class="hint">Image is what sends the PNG as a WhatsApp photo instead of a link.</p></div><div class="step-fields"><div class="field"><div class="field-head"><span>ticket</span><button class="copy-btn" type="button">Copy</button></div><code>Use the image_url returned by render_ticket.</code></div><div class="field"><div class="field-head"><span>chart</span><button class="copy-btn" type="button">Copy</button></div><code>Use the image_url returned by render_chart.</code></div></div></div>
-      <div class="inst step-row"><div class="step-side"><div class="n">03</div><h3>One line in the system prompt</h3><p class="hint">Plus your own business data: menu, prices, sales.</p></div><div class="step-fields"><div class="field"><div class="field-head"><span>Prompt</span><button class="copy-btn" type="button">Copy</button></div><pre>When the user asks for a ticket, call render_ticket and send the image_url with the ticket skill. When they ask about sales, call render_chart and send the image_url with the chart skill. Never compute totals yourself: use the totals the tool returns.</pre></div></div></div>
+      <div class="inst step-row"><div class="step-side"><div class="n">01</div><h3>Add the MCP server</h3><p class="hint">Streamable HTTP, no headers. The client lists <code>render_ticket</code> and <code>render_chart</code> with their schemas.</p></div><div class="step-fields"><div class="field"><div class="field-head"><span>Name</span><button class="copy-btn" type="button">Copy</button></div><code>Quick Images MCP</code></div><div class="field"><div class="field-head"><span>Server URL</span><button class="copy-btn" type="button">Copy</button></div><code>https://quick-images-mcp.fguespe.workers.dev/mcp</code></div></div></div>
+      <div class="inst step-row"><div class="step-side"><div class="n">02</div><h3>Send it as an image</h3><p class="hint">Whatever your platform uses to send an image message from a URL. Sent as text, the URL arrives as a link, not a photo.</p></div><div class="step-fields"><div class="field"><div class="field-head"><span>Image message</span><button class="copy-btn" type="button">Copy</button></div><code>Send the image_url returned by render_ticket or render_chart as an image.</code></div></div></div>
+      <div class="inst step-row"><div class="step-side"><div class="n">03</div><h3>One line in the system prompt</h3><p class="hint">Plus your own business data: menu, prices, sales.</p></div><div class="step-fields"><div class="field"><div class="field-head"><span>Prompt</span><button class="copy-btn" type="button">Copy</button></div><pre>When the user asks for a ticket, call render_ticket and send the image_url as an image. When they ask about sales, call render_chart and send the image_url as an image. Never compute totals yourself: use the totals the tool returns.</pre></div></div></div>
     </div>
     <details class="alt">
       <summary>Prefer webhook tools? Same two tools, pasted field by field.</summary>
@@ -464,7 +464,7 @@
 <section>
   <div class="wrap">
     <div class="eyebrow">Why</div>
-    <h2>Why images <span class="gray">in a Kapso chat.</span></h2>
+    <h2>Why images <span class="gray">in a WhatsApp chat.</span></h2>
     <div class="cards">
       <div class="card"><h3>Totals in code</h3><p>The model passes items and prices. Subtotal, discount, tax and total are computed in integer cents on the server, so the number on the receipt is the number you charge.</p></div>
       <div class="card"><h3>Readable at a glance</h3><p>Five lines of items as text get lost in a chat. A receipt is a format people already trust and screenshot.</p></div>
@@ -475,8 +475,8 @@
 
 <footer>
   <div class="wrap">
-    <span>Quick Images MCP is a prototype by <a href="https://github.com/humanagent">Fabri Guespe</a>, built on Kapso Agent UI skills. Not an official Kapso product.</span>
-    <span><a href="https://docs.kapso.ai/docs/flows/step-types/agent-ui-skills">Kapso Agent UI skills</a> · <a href="/api">API index</a></span>
+    <span>Quick Images MCP is a prototype by <a href="https://github.com/humanagent">Fabri Guespe</a>.</span>
+    <span><a href="https://modelcontextprotocol.io">MCP</a> · <a href="/api">API index</a></span>
   </div>
 </footer>
 

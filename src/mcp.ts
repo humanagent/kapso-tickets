@@ -1,5 +1,5 @@
 // MCP over Streamable HTTP, stateless: every POST /mcp is one JSON-RPC message
-// (or a batch) answered with plain JSON. Kapso's "Add MCP Server" takes one URL
+// (or a batch) answered with plain JSON. An MCP client takes one URL
 // and reads the tools from tools/list, so nobody pastes schemas by hand.
 
 const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];

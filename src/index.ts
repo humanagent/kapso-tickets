@@ -7,7 +7,7 @@ import { mcp } from "./mcp";
 const app = new Hono<{ Bindings: { SIGNING_KEY: string } }>();
 
 // The ticket travels in the URL, so an image URL is the whole state:
-// no storage, cacheable forever, and Kapso's image skill just GETs it.
+// no storage, cacheable forever, and WhatsApp just GETs it.
 const encode = (t: unknown) => btoa(unescape(encodeURIComponent(JSON.stringify(t))))
   .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const decode = (s: string): unknown =>
@@ -86,7 +86,7 @@ async function render(html: string, height: number) {
 
 app.get("/api", async (c) =>
   c.json({
-    what: "Quick Images MCP (prototype, not an official Kapso product): tickets and charts as PNGs for WhatsApp agents",
+    what: "Quick Images MCP (prototype): tickets and charts as PNGs for WhatsApp agents",
     post: "POST /tickets with a ticket JSON -> { image_url, totals }",
     charts: "POST /charts with { title, points: [{ label, value }] } -> { image_url, total }",
     mcp: "MCP server (Streamable HTTP): POST /mcp, tools render_ticket and render_chart",

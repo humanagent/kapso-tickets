@@ -36,7 +36,7 @@ check("chart example redirects to a signed url", (await status(`${base}/charts/e
 const bad = await post("/tickets", { store: { name: "x" }, items: [] });
 check("bad ticket is a 400", bad.status === 400);
 
-// MCP: the same tools over JSON-RPC, as Kapso's "Add MCP Server" calls them.
+// MCP: the same tools over JSON-RPC, as an MCP client calls them.
 const rpc = async (method, params, id = 1) => {
   const res = await post("/mcp", { jsonrpc: "2.0", id, method, params });
   return { status: res.status, body: res.status === 202 ? null : await res.json() };

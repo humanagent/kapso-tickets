@@ -1,6 +1,6 @@
 // Tool-call eval: does the agent turn an owner's message into a correct ticket or chart?
 //   ANTHROPIC_API_KEY=... node evals/run.mjs [--base https://...] [--runs 3]
-// For each case: one Messages API call with the Kapso agent's prompt and tools,
+// For each case: one Messages API call with the agent's prompt and tools,
 // then the tool input is POSTed to the live service and the image is fetched.
 import Anthropic from "@anthropic-ai/sdk";
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
