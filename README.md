@@ -1,0 +1,48 @@
+# Tickets for Kapso agents
+
+JSON in, PNG ticket out. A WhatsApp agent sends the order data and gets back an image URL it can send with the Kapso image UI skill.
+
+Live: https://kapso-tickets.fguespe.workers.dev
+
+A prototype by Fabri Guespe. Not an official Kapso product.
+
+## Why
+
+The Kapso agent node can send images, but only from a URL that already exists. Image apps in the App step take HTML and need an external account. Here the LLM passes only data, a template renders it, and nothing needs setup.
+
+## API
+
+```
+POST /tickets
+{
+  "store": { "name": "Pizzería La Esquina" },
+  "items": [{ "name": "Muzza grande", "qty": 2, "price": 12500 }],
+  "currency": "ARS"
+}
+
+→ 200 { "image_url": "https://kapso-tickets.fguespe.workers.dev/t/<data>.png", "totals": { "subtotal": 25000, "discount": 0, "tax": 0, "total": 25000 } }
+```
+
+Optional fields: `number`, `date`, `customer`, `discount`, `taxRate` (0 to <1), `payment`, `note`.
+
+- The ticket is base64url-encoded in the image URL, so there is no storage and the PNG is cached as immutable.
+- Totals are computed server side in integer cents. The model never does the math.
+- Up to 12 items; `image_url` must fit WhatsApp's 2048-character limit (413 otherwise).
+
+`GET /api/example` returns a sample ticket.
+
+## Wiring it in Kapso
+
+1. Workflow with a WhatsApp message trigger.
+2. AI Agent node with a webhook tool `render_ticket`: `POST https://kapso-tickets.fguespe.workers.dev/tickets`, body schema `store`, `items`, `currency`.
+3. UI skill, format Image: use the `image_url` returned by `render_ticket`.
+
+## Stack
+
+Cloudflare Workers, Hono, workers-og (satori + resvg), Space Mono.
+
+```
+npm install
+npx wrangler dev      # local
+npx wrangler deploy
+```
