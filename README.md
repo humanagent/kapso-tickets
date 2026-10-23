@@ -73,9 +73,15 @@ A smaller gain than local: 56 ms at p50, 212 ms at p95. The second fetch is stil
 
 ## Wiring it in Kapso
 
-1. Workflow with a WhatsApp message trigger.
-2. AI Agent node with a webhook tool `render_ticket`: `POST https://kapso-tickets.fguespe.workers.dev/tickets`, body schema `store`, `items`, `currency`.
-3. UI skill, format Image: use the `image_url` returned by `render_ticket`.
+The landing has every field below with a Copy button (`/#install`).
+
+1. Workflow with a WhatsApp message trigger (the sandbox number works) and an AI Agent node.
+2. Webhook tool `render_ticket`: `POST https://kapso-tickets.fguespe.workers.dev/tickets`, body schema `store`, `customer`, `items`, `currency`, `payment`.
+3. Webhook tool `render_chart`: `POST https://kapso-tickets.fguespe.workers.dev/charts`, body schema `title`, `subtitle`, `currency`, `points`.
+4. Two UI skills, format Image: use the `image_url` returned by each tool.
+5. One line in the system prompt: call the tool, send the `image_url` with the skill, never compute totals.
+
+No API key and no external account.
 
 ## Stack
 
