@@ -1,13 +1,19 @@
-// Smoke test against a running Worker: node scripts/smoke.mjs [base url]
-// Checks that signed URLs render and that edited ones are refused.
+// Smoke test against a running Worker: QI_KEY=<key> node scripts/smoke.mjs [base url]
+// Checks that signed URLs render, that edited ones are refused, and that creating
+// an image needs an API key (node scripts/new-key.mjs smoke --local issues one).
 const base = process.argv[2] ?? "http://localhost:8787";
+const key = process.env.QI_KEY;
+if (!key) {
+  console.error("set QI_KEY (node scripts/new-key.mjs smoke --local)");
+  process.exit(1);
+}
 let failed = 0;
 const check = (name, ok, extra = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? `  (${extra})` : ""}`);
   if (!ok) failed++;
 };
-const post = (path, body) =>
-  fetch(base + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+const post = (path, body, headers = { authorization: `Bearer ${key}` }) =>
+  fetch(base + path, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 const status = async (url) => (await fetch(url, { redirect: "manual" })).status;
 
 const ticket = { store: { name: "La Esquina" }, items: [{ name: "Muzza", qty: 2, price: 12500 }], currency: "ARS" };
@@ -32,6 +38,11 @@ check("POST /charts returns a signed url", cr.status === 200 && /\/c\/[\w-]+\.[\
 check("signed chart renders", (await status(chart.image_url)) === 200);
 check("ticket example redirects to a signed url", (await status(`${base}/tickets/example.png`)) === 302);
 check("chart example redirects to a signed url", (await status(`${base}/charts/example.png`)) === 302);
+
+check("no key is a 401", (await post("/tickets", ticket, {})).status === 401);
+check("unknown key is a 401", (await post("/tickets", ticket, { authorization: "Bearer qi_nope" })).status === 401);
+check("mcp without a key is a 401", (await post("/mcp", { jsonrpc: "2.0", id: 1, method: "tools/list" }, {})).status === 401);
+check("landing (same-origin) works without a key", (await post("/tickets", ticket, { "sec-fetch-site": "same-origin" })).status === 200);
 
 const bad = await post("/tickets", { store: { name: "x" }, items: [] });
 check("bad ticket is a 400", bad.status === 400);

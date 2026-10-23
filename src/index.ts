@@ -4,7 +4,7 @@ import { example, parseTicket, ticketHeight, ticketHtml, totals } from "./ticket
 import { CHART_H, chartHtml, chartTotal, exampleChart, parseChart } from "./chart";
 import { mcp } from "./mcp";
 
-const app = new Hono<{ Bindings: { SIGNING_KEY: string } }>();
+const app = new Hono<{ Bindings: { SIGNING_KEY: string; API_KEYS: KVNamespace } }>();
 
 // The ticket travels in the URL, so an image URL is the whole state:
 // no storage, cacheable forever, and WhatsApp just GETs it.
@@ -51,6 +51,25 @@ async function imageUrl(c: { req: { url: string }; env: { SIGNING_KEY: string } 
 
 app.use("*", async (c, next) => {
   if (!c.env.SIGNING_KEY) return c.json({ error: "SIGNING_KEY is not configured" }, 500);
+  await next();
+});
+
+// Creating an image needs an API key; fetching one does not, because WhatsApp
+// GETs the PNG without headers (those URLs are signed instead). The landing's
+// Try it box calls POST /tickets from the browser without a key: browsers set
+// Sec-Fetch-Site and page scripts cannot, but curl can, so that exemption is a
+// convenience for the demo, not a security boundary.
+const sha256 = async (s: string) =>
+  [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))]
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+
+app.use("*", async (c, next) => {
+  const creates = c.req.method === "POST" && ["/tickets", "/charts", "/mcp"].includes(c.req.path);
+  if (!creates || c.req.header("sec-fetch-site") === "same-origin") return next();
+  const key = c.req.header("authorization")?.match(/^Bearer (\S+)$/)?.[1];
+  if (!key || !(await c.env.API_KEYS.get(await sha256(key)))) {
+    return c.json({ error: "missing or invalid API key: send Authorization: Bearer <key>" }, 401, { "www-authenticate": "Bearer" });
+  }
   await next();
 });
 

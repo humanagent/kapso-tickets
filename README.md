@@ -45,7 +45,14 @@ A bar chart for backoffice questions (*"how did we sell this week?"*), up to 14 
 
 ### MCP server
 
-`POST /mcp` is an MCP server (Streamable HTTP, stateless JSON): `initialize`, `tools/list` and `tools/call` with `render_ticket` and `render_chart`, the same code as the REST routes. Point any MCP client at `https://quick-images-mcp.fguespe.workers.dev/mcp`, no headers. Tool errors (bad input) come back as `isError` results the model can read and fix. Checked with the official MCP TypeScript client and in `npm run smoke`.
+`POST /mcp` is an MCP server (Streamable HTTP, stateless JSON): `initialize`, `tools/list` and `tools/call` with `render_ticket` and `render_chart`, the same code as the REST routes. Point any MCP client at `https://quick-images-mcp.fguespe.workers.dev/mcp` with the header `Authorization: Bearer <key>`. Tool errors (bad input) come back as `isError` results the model can read and fix. Checked with the official MCP TypeScript client and in `npm run smoke`.
+
+### API keys
+
+Creating an image (`POST /tickets`, `POST /charts`, `POST /mcp`) needs `Authorization: Bearer <key>`; anything else is a 401. Fetching an image does not: WhatsApp GETs the PNG without headers, and those URLs are signed instead.
+
+- `node scripts/new-key.mjs <name>` prints a new key once. KV stores only its SHA-256 with the name, so a dump of the namespace opens nothing.
+- The landing's Try it box calls `POST /tickets` without a key, allowed when the browser sends `Sec-Fetch-Site: same-origin`. A page script cannot set that header but curl can, so this is a demo convenience, not a security boundary. Rate limits per key are the next step.
 
 ## Evals
 
@@ -55,7 +62,7 @@ A bar chart for backoffice questions (*"how did we sell this week?"*), up to 14 
 ANTHROPIC_API_KEY=... node evals/run.mjs --runs 3
 ```
 
-Results: not run yet (needs an API key).
+Results: not run yet (needs an Anthropic API key).
 
 **Render benchmark** (`node evals/bench.mjs`, no model): 40 unique tickets against production, from Buenos Aires, 2026-10-23, before the cache fix:
 
@@ -79,11 +86,11 @@ A smaller gain than local: 56 ms at p50, 212 ms at p95. The second fetch is stil
 
 The landing has every field below with a Copy button (`/#install`).
 
-1. Add the MCP server: `https://quick-images-mcp.fguespe.workers.dev/mcp`. The client reads both tools and their schemas from it.
+1. Add the MCP server: `https://quick-images-mcp.fguespe.workers.dev/mcp`, headers `{ "Authorization": "Bearer <key>" }`. The client reads both tools and their schemas from it.
 2. Send the returned `image_url` as an image message (as text it arrives as a link).
 3. One line in the system prompt: call the tool, send the `image_url` as an image, never compute totals.
 
-Webhook tools work too (`POST /tickets`, `POST /charts`, schemas on the landing). No API key and no external account either way.
+Webhook tools work too (`POST /tickets`, `POST /charts`, schemas on the landing), with the same header.
 
 ## Stack
 
@@ -93,7 +100,8 @@ Cloudflare Workers, Hono, workers-og (satori + resvg), Space Mono.
 npm install
 echo "SIGNING_KEY=$(openssl rand -hex 32)" > .dev.vars
 npm run dev
-npm run smoke                         # 17 checks against localhost: forged URLs, MCP
+node scripts/new-key.mjs smoke --local # prints a local key
+QI_KEY=<key> npm run smoke            # 22 checks against localhost: forged URLs, keys, MCP
 npx wrangler secret put SIGNING_KEY   # once, before the first deploy
 npm run deploy
 ```
