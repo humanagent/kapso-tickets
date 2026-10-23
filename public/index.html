@@ -300,11 +300,12 @@
   <div class="wrap">
     <div class="eyebrow">API</div>
     <h2>JSON in. <span class="gray">Image URL out.</span></h2>
-    <p class="sub">No storage: the ticket lives in the URL, so every image is cacheable forever and stays under WhatsApp's 2,048-character <code class="mono">image_url</code> limit. Bad input comes back as a 400 the agent can read and fix.</p>
+    <p class="sub">No storage: the ticket lives in the URL, so every image is cacheable forever. A ticket too big for WhatsApp's 2,048-character <code class="mono">image_url</code> limit is a 413, and bad input is a 400 the agent can read and fix.</p>
     <div class="split">
       <div class="code">
         <div class="code-head"><span>request</span><span class="mono">POST /tickets</span></div>
 <pre><span class="k">curl</span> -X POST <span class="s">$HOST/tickets</span> \
+  -H <span class="s">'authorization: Bearer $KEY'</span> \
   -H <span class="s">'content-type: application/json'</span> \
   -d <span class="s">'{
   "store": { "name": "Café Tortoni" },
