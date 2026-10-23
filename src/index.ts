@@ -3,7 +3,7 @@ import { ImageResponse, loadGoogleFont } from "workers-og";
 import { example, parseTicket, ticketHeight, ticketHtml, totals } from "./ticket";
 import { CHART_H, chartHtml, chartTotal, exampleChart, parseChart } from "./chart";
 
-const app = new Hono();
+const app = new Hono<{ Bindings: { SIGNING_KEY: string } }>();
 
 // The ticket travels in the URL, so an image URL is the whole state:
 // no storage, cacheable forever, and Kapso's image skill just GETs it.
@@ -11,6 +11,47 @@ const encode = (t: unknown) => btoa(unescape(encodeURIComponent(JSON.stringify(t
   .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const decode = (s: string): unknown =>
   JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g, "+").replace(/_/g, "/")))));
+
+// The URL carries the whole ticket, so without a signature anyone could edit the
+// base64 and render a ticket with a different total. Each image URL carries an
+// HMAC of its kind and data; a URL we did not sign renders nothing.
+const b64url = (buf: ArrayBuffer) =>
+  btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+const keys = new Map<string, Promise<CryptoKey>>();
+const hmacKey = (secret: string) => {
+  if (!keys.has(secret)) {
+    keys.set(secret, crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]));
+  }
+  return keys.get(secret)!;
+};
+
+// 16 bytes of HMAC-SHA256 keeps the URL short and is still far beyond guessing.
+async function sign(secret: string, kind: string, data: string) {
+  const mac = await crypto.subtle.sign("HMAC", await hmacKey(secret), new TextEncoder().encode(`${kind}:${data}`));
+  return b64url(mac.slice(0, 16));
+}
+
+async function verified(secret: string, kind: string, param: string): Promise<string | null> {
+  const [data, sig] = param.replace(/\.png$/, "").split(".");
+  if (!data || !sig) return null;
+  const expected = await sign(secret, kind, data);
+  // Constant-time compare: a short-circuit compare leaks how many characters match.
+  if (expected.length !== sig.length) return null;
+  let diff = 0;
+  for (let i = 0; i < sig.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
+  return diff === 0 ? data : null;
+}
+
+async function imageUrl(c: { req: { url: string }; env: { SIGNING_KEY: string } }, kind: "t" | "c", value: unknown) {
+  const data = encode(value);
+  return new URL(`/${kind}/${data}.${await sign(c.env.SIGNING_KEY, kind, data)}.png`, c.req.url).toString();
+}
+
+app.use("*", async (c, next) => {
+  if (!c.env.SIGNING_KEY) return c.json({ error: "SIGNING_KEY is not configured" }, 500);
+  await next();
+});
 
 let fonts: Promise<{ name: string; data: ArrayBuffer; weight: 400 | 700; style: "normal" }[]> | undefined;
 const loadFonts = () =>
@@ -31,12 +72,12 @@ async function render(html: string, height: number) {
   });
 }
 
-app.get("/api", (c) =>
+app.get("/api", async (c) =>
   c.json({
     what: "Renders a purchase ticket as a PNG for WhatsApp agents",
     post: "POST /tickets with a ticket JSON -> { image_url, totals }",
     charts: "POST /charts with { title, points: [{ label, value }] } -> { image_url, total }",
-    example: new URL(`/t/${encode(example)}.png`, c.req.url).toString(),
+    example: await imageUrl(c, "t", example),
   }),
 );
 
@@ -46,7 +87,7 @@ app.get("/api/example-chart", (c) => c.json(exampleChart));
 app.post("/tickets", async (c) => {
   try {
     const t = parseTicket(await c.req.json());
-    const image_url = new URL(`/t/${encode(t)}.png`, c.req.url).toString();
+    const image_url = await imageUrl(c, "t", t);
     if (image_url.length > 2048) return c.json({ error: "ticket too large for a WhatsApp image_url" }, 413);
     return c.json({ image_url, totals: totals(t) });
   } catch (e) {
@@ -56,19 +97,21 @@ app.post("/tickets", async (c) => {
 
 app.get("/t/:data{.+\\.png}", async (c) => {
   try {
-    const t = parseTicket(decode(c.req.param("data").replace(/\.png$/, "")));
+    const data = await verified(c.env.SIGNING_KEY, "t", c.req.param("data"));
+    if (!data) return c.json({ error: "invalid signature" }, 403);
+    const t = parseTicket(decode(data));
     return await render(ticketHtml(t), ticketHeight(t));
   } catch (e) {
     return c.json({ error: (e as Error).message }, 400);
   }
 });
 
-app.get("/charts/example.png", (c) => c.redirect(`/c/${encode(exampleChart)}.png`));
+app.get("/charts/example.png", async (c) => c.redirect(await imageUrl(c, "c", exampleChart)));
 
 app.post("/charts", async (c) => {
   try {
     const ch = parseChart(await c.req.json());
-    const image_url = new URL(`/c/${encode(ch)}.png`, c.req.url).toString();
+    const image_url = await imageUrl(c, "c", ch);
     if (image_url.length > 2048) return c.json({ error: "chart too large for a WhatsApp image_url" }, 413);
     return c.json({ image_url, total: chartTotal(ch) });
   } catch (e) {
@@ -78,7 +121,9 @@ app.post("/charts", async (c) => {
 
 app.get("/c/:data{.+\\.png}", async (c) => {
   try {
-    return await render(chartHtml(parseChart(decode(c.req.param("data").replace(/\.png$/, "")))), CHART_H);
+    const data = await verified(c.env.SIGNING_KEY, "c", c.req.param("data"));
+    if (!data) return c.json({ error: "invalid signature" }, 403);
+    return await render(chartHtml(parseChart(decode(data))), CHART_H);
   } catch (e) {
     return c.json({ error: (e as Error).message }, 400);
   }

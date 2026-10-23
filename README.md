@@ -26,6 +26,7 @@ POST /tickets
 Optional fields: `number`, `date`, `customer`, `discount`, `taxRate` (0 to <1), `payment`, `note`.
 
 - The ticket is base64url-encoded in the image URL, so there is no storage and the PNG is cached as immutable.
+- **Every image URL is signed** (HMAC-SHA256 over kind + data, 16 bytes, `/t/<data>.<sig>.png`). Without it, anyone could edit the base64 and render a ticket with another total. Edited, unsigned or cross-kind URLs get a 403; the compare is constant time.
 - Totals are computed server side in integer cents. The model never does the math.
 - Up to 12 items; `image_url` must fit WhatsApp's 2048-character limit (413 otherwise).
 
@@ -54,6 +55,9 @@ Cloudflare Workers, Hono, workers-og (satori + resvg), Space Mono.
 
 ```
 npm install
-npx wrangler dev      # local
-npx wrangler deploy
+echo "SIGNING_KEY=$(openssl rand -hex 32)" > .dev.vars
+npm run dev
+npm run smoke                         # 11 checks against localhost, including forged URLs
+npx wrangler secret put SIGNING_KEY   # once, before the first deploy
+npm run deploy
 ```
