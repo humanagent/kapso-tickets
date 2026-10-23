@@ -1,6 +1,6 @@
 # Tickets for Kapso agents
 
-JSON in, PNG ticket out. A WhatsApp agent sends the order data and gets back an image URL it can send with the Kapso image UI skill.
+JSON in, PNG out: tickets and bar charts. A WhatsApp agent sends the order data and gets back an image URL it can send with the Kapso image UI skill.
 
 Live: https://kapso-tickets.fguespe.workers.dev
 
@@ -30,6 +30,17 @@ Optional fields: `number`, `date`, `customer`, `discount`, `taxRate` (0 to <1), 
 - Up to 12 items; `image_url` must fit WhatsApp's 2048-character limit (413 otherwise).
 
 `GET /api/example` returns a sample ticket.
+
+### Charts
+
+```
+POST /charts
+{ "title": "Ventas de la semana", "currency": "ARS", "points": [{ "label": "Lun", "value": 182000 }, { "label": "Mar", "value": 156500 }] }
+
+→ 200 { "image_url": "https://kapso-tickets.fguespe.workers.dev/c/<data>.png", "total": 338500 }
+```
+
+A bar chart for backoffice questions (*"how did we sell this week?"*), up to 14 points, the highest bar in green. Example: `/charts/example.png`.
 
 ## Wiring it in Kapso
 
