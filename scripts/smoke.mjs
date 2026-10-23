@@ -35,5 +35,22 @@ check("chart example redirects to a signed url", (await status(`${base}/charts/e
 const bad = await post("/tickets", { store: { name: "x" }, items: [] });
 check("bad ticket is a 400", bad.status === 400);
 
+// MCP: the same tools over JSON-RPC, as Kapso's "Add MCP Server" calls them.
+const rpc = async (method, params, id = 1) => {
+  const res = await post("/mcp", { jsonrpc: "2.0", id, method, params });
+  return { status: res.status, body: res.status === 202 ? null : await res.json() };
+};
+const init = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "smoke", version: "0" } });
+check("mcp initialize", init.body?.result?.capabilities?.tools !== undefined, init.body?.result?.protocolVersion);
+check("mcp notification is a 202", (await post("/mcp", { jsonrpc: "2.0", method: "notifications/initialized" })).status === 202);
+const list = await rpc("tools/list", {});
+check("mcp lists both tools", list.body?.result?.tools?.map((t) => t.name).join(",") === "render_ticket,render_chart");
+const call = await rpc("tools/call", { name: "render_ticket", arguments: ticket });
+const sc = call.body?.result?.structuredContent;
+check("mcp render_ticket matches REST", sc?.totals?.total === 25000 && sc?.image_url === image_url);
+check("mcp image renders", (await status(sc?.image_url)) === 200);
+const badCall = await rpc("tools/call", { name: "render_ticket", arguments: { store: { name: "x" }, items: [] } });
+check("mcp bad input is a readable tool error", badCall.body?.result?.isError === true);
+
 console.log(failed ? `\n${failed} failed` : "\nall passed");
 process.exit(failed ? 1 : 0);

@@ -2,7 +2,7 @@
 //   node evals/bench.mjs [base] [n]
 // cold = a ticket never rendered before (unique note per request, so no cache);
 // warm = the same image URL fetched again (edge cache).
-const base = process.argv[2] ?? "https://kapso-tickets.fguespe.workers.dev";
+const base = process.argv[2] ?? "https://quick-images-mcp.fguespe.workers.dev";
 const n = Number(process.argv[3] ?? 40);
 const pct = (xs, p) => { const s = [...xs].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))]; };
 const time = async (f) => { const t = performance.now(); await f(); return performance.now() - t; };
