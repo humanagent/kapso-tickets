@@ -1,14 +1,14 @@
 # Quick Images MCP
 
-JSON in, PNG out: tickets and bar charts a Kapso WhatsApp agent can send. A WhatsApp agent sends the order data and gets back an image URL it can send with the Kapso image UI skill.
+JSON in, PNG out: tickets and bar charts a WhatsApp agent can send. The agent sends the order data, over MCP or REST, and gets back an image URL it sends as an image message.
 
 Live: https://quick-images-mcp.fguespe.workers.dev
 
-A prototype by Fabri Guespe, built on Kapso Agent UI skills. Not an official Kapso product.
+A prototype by Fabri Guespe.
 
 ## Why
 
-The Kapso agent node can send images, but only from a URL that already exists. Image apps in the App step take HTML and need an external account. Here the LLM passes only data, a template renders it, and nothing needs setup.
+WhatsApp agents can send images, but only from a URL that already exists. Image services that render HTML need an account and an HTML template written by the model. Here the LLM passes only data, a template renders it, and nothing needs setup.
 
 ## API
 
@@ -45,17 +45,24 @@ A bar chart for backoffice questions (*"how did we sell this week?"*), up to 14 
 
 ### MCP server
 
-`POST /mcp` is an MCP server (Streamable HTTP, stateless JSON): `initialize`, `tools/list` and `tools/call` with `render_ticket` and `render_chart`, the same code as the REST routes. In Kapso: AI Agent node → Add MCP Server → `https://quick-images-mcp.fguespe.workers.dev/mcp`, headers empty. Tool errors (bad input) come back as `isError` results the model can read and fix. Checked with the official MCP TypeScript client and in `npm run smoke`.
+`POST /mcp` is an MCP server (Streamable HTTP, stateless JSON): `initialize`, `tools/list` and `tools/call` with `render_ticket` and `render_chart`, the same code as the REST routes. Point any MCP client at `https://quick-images-mcp.fguespe.workers.dev/mcp` with the header `Authorization: Bearer <key>`. Tool errors (bad input) come back as `isError` results the model can read and fix. Checked with the official MCP TypeScript client and in `npm run smoke`.
+
+### API keys
+
+Creating an image (`POST /tickets`, `POST /charts`, `POST /mcp`) needs `Authorization: Bearer <key>`; anything else is a 401. Fetching an image does not: WhatsApp GETs the PNG without headers, and those URLs are signed instead.
+
+- `node scripts/new-key.mjs <name>` prints a new key once. KV stores only its SHA-256 with the name, so a dump of the namespace opens nothing.
+- The landing's Try it box calls `POST /tickets` without a key, allowed when the browser sends `Sec-Fetch-Site: same-origin`. A page script cannot set that header but curl can, so this is a demo convenience, not a security boundary. Rate limits per key are the next step.
 
 ## Evals
 
-**Tool-call eval** (`evals/`): 22 owner messages (typos, "x2", words for numbers, English, an item not on the menu, a price override, sales questions, small talk) run through the same prompt, model (`claude-sonnet-5-5`, effort high) and tool schemas as the Kapso agent node. Each tool input is POSTed to the live service and the PNG fetched. Checks per ticket: accepted by the API, items exactly right, menu prices used, customer and payment carried, total right; per chart: the 7 days and the total.
+**Tool-call eval** (`evals/`): 22 owner messages (typos, "x2", words for numbers, English, an item not on the menu, a price override, sales questions, small talk) run through the same prompt, model (`claude-sonnet-5-5`, effort high) and tool schemas as the WhatsApp agent it was tested in. Each tool input is POSTed to the live service and the PNG fetched. Checks per ticket: accepted by the API, items exactly right, menu prices used, customer and payment carried, total right; per chart: the 7 days and the total.
 
 ```
 ANTHROPIC_API_KEY=... node evals/run.mjs --runs 3
 ```
 
-Results: not run yet (needs an API key).
+Results: not run yet (needs an Anthropic API key).
 
 **Render benchmark** (`node evals/bench.mjs`, no model): 40 unique tickets against production, from Buenos Aires, 2026-10-23, before the cache fix:
 
@@ -75,16 +82,15 @@ The second fetch cost the same as the first: the `immutable` header was not enou
 
 A smaller gain than local: 56 ms at p50, 212 ms at p95. The second fetch is still well above a POST (73 ms, about one round trip), so not every repeat is a cache hit. Cloudflare documents the Cache API for custom domains and does not say how it behaves on `*.workers.dev`; moving to a custom domain is the next thing to measure.
 
-## Wiring it in Kapso
+## Wiring it into an agent
 
 The landing has every field below with a Copy button (`/#install`).
 
-1. Workflow with a WhatsApp message trigger (the sandbox number works) and an AI Agent node.
-2. Add MCP Server: `https://quick-images-mcp.fguespe.workers.dev/mcp`. Kapso reads both tools and their schemas from it.
-3. Two UI skills, format Image: use the `image_url` returned by each tool.
-4. One line in the system prompt: call the tool, send the `image_url` with the skill, never compute totals.
+1. Add the MCP server: `https://quick-images-mcp.fguespe.workers.dev/mcp`, headers `{ "Authorization": "Bearer <key>" }`. The client reads both tools and their schemas from it.
+2. Send the returned `image_url` as an image message (as text it arrives as a link).
+3. One line per tool in the system prompt (both on the landing): call the tool, send the `image_url` as an image, never compute totals.
 
-Webhook tools work too (`POST /tickets`, `POST /charts`, schemas on the landing). No API key and no external account either way.
+Webhook tools work too (`POST /tickets`, `POST /charts`, schemas on the landing), with the same header.
 
 ## Stack
 
@@ -94,7 +100,8 @@ Cloudflare Workers, Hono, workers-og (satori + resvg), Space Mono.
 npm install
 echo "SIGNING_KEY=$(openssl rand -hex 32)" > .dev.vars
 npm run dev
-npm run smoke                         # 17 checks against localhost: forged URLs, MCP
+node scripts/new-key.mjs smoke --local # prints a local key
+QI_KEY=<key> npm run smoke            # 22 checks against localhost: forged URLs, keys, MCP
 npx wrangler secret put SIGNING_KEY   # once, before the first deploy
 npm run deploy
 ```

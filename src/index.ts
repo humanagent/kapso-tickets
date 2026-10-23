@@ -4,10 +4,10 @@ import { example, parseTicket, ticketHeight, ticketHtml, totals } from "./ticket
 import { CHART_H, chartHtml, chartTotal, exampleChart, parseChart } from "./chart";
 import { mcp } from "./mcp";
 
-const app = new Hono<{ Bindings: { SIGNING_KEY: string } }>();
+const app = new Hono<{ Bindings: { SIGNING_KEY: string; API_KEYS: KVNamespace } }>();
 
 // The ticket travels in the URL, so an image URL is the whole state:
-// no storage, cacheable forever, and Kapso's image skill just GETs it.
+// no storage, cacheable forever, and WhatsApp just GETs it.
 const encode = (t: unknown) => btoa(unescape(encodeURIComponent(JSON.stringify(t))))
   .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const decode = (s: string): unknown =>
@@ -54,6 +54,25 @@ app.use("*", async (c, next) => {
   await next();
 });
 
+// Creating an image needs an API key; fetching one does not, because WhatsApp
+// GETs the PNG without headers (those URLs are signed instead). The landing's
+// Try it box calls POST /tickets from the browser without a key: browsers set
+// Sec-Fetch-Site and page scripts cannot, but curl can, so that exemption is a
+// convenience for the demo, not a security boundary.
+const sha256 = async (s: string) =>
+  [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))]
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+
+app.use("*", async (c, next) => {
+  const creates = c.req.method === "POST" && ["/tickets", "/charts", "/mcp"].includes(c.req.path);
+  if (!creates || c.req.header("sec-fetch-site") === "same-origin") return next();
+  const key = c.req.header("authorization")?.match(/^Bearer (\S+)$/)?.[1];
+  if (!key || !(await c.env.API_KEYS.get(await sha256(key)))) {
+    return c.json({ error: "missing or invalid API key: send Authorization: Bearer <key>" }, 401, { "www-authenticate": "Bearer" });
+  }
+  await next();
+});
+
 let fonts: Promise<{ name: string; data: ArrayBuffer; weight: 400 | 700; style: "normal" }[]> | undefined;
 const loadFonts = () =>
   (fonts ??= Promise.all([
@@ -86,7 +105,7 @@ async function render(html: string, height: number) {
 
 app.get("/api", async (c) =>
   c.json({
-    what: "Quick Images MCP (prototype, not an official Kapso product): tickets and charts as PNGs for WhatsApp agents",
+    what: "Quick Images MCP (prototype): tickets and charts as PNGs for WhatsApp agents",
     post: "POST /tickets with a ticket JSON -> { image_url, totals }",
     charts: "POST /charts with { title, points: [{ label, value }] } -> { image_url, total }",
     mcp: "MCP server (Streamable HTTP): POST /mcp, tools render_ticket and render_chart",
@@ -137,6 +156,7 @@ app.get("/t/:data{.+\\.png}", async (c) => {
 });
 
 app.get("/charts/example.png", async (c) => c.redirect(await imageUrl(c, "c", exampleChart)));
+app.get("/tickets/example.png", async (c) => c.redirect(await imageUrl(c, "t", example)));
 
 app.post("/charts", async (c) => {
   try {

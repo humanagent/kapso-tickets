@@ -5,4 +5,9 @@ compatibility_flags = ["nodejs_compat"]
 
 [assets]
 directory = "./public"
-run_worker_first = ["/api/*", "/t/*", "/c/*", "/tickets", "/charts", "/charts/*", "/mcp"]
+run_worker_first = ["/api/*", "/t/*", "/c/*", "/tickets", "/tickets/*", "/charts", "/charts/*", "/mcp"]
+
+# SHA-256 of each API key -> { name, created }. Keys are issued with scripts/new-key.mjs.
+[[kv_namespaces]]
+binding = "API_KEYS"
+id = "25ecaaaa91f1496fbfe9dfe6577182b5"
