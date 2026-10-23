@@ -88,7 +88,7 @@ The landing has every field below with a Copy button (`/#install`).
 
 1. Add the MCP server: `https://quick-images-mcp.fguespe.workers.dev/mcp`, headers `{ "Authorization": "Bearer <key>" }`. The client reads both tools and their schemas from it.
 2. Send the returned `image_url` as an image message (as text it arrives as a link).
-3. One line in the system prompt: call the tool, send the `image_url` as an image, never compute totals.
+3. One line per tool in the system prompt (both on the landing): call the tool, send the `image_url` as an image, never compute totals.
 
 Webhook tools work too (`POST /tickets`, `POST /charts`, schemas on the landing), with the same header.
 
