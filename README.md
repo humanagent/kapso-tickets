@@ -61,7 +61,15 @@ Results: not run yet (needs an API key).
 | GET image, first fetch (render) | 279 | 531 |
 | GET image, second fetch | 288 | 537 |
 
-The second fetch cost the same as the first: the `immutable` header was not enough, Cloudflare does not cache Worker responses by itself, so every fetch re-rendered. Rendered PNGs now go into the Cache API. Locally (`wrangler dev`, n=10) that took the second fetch from 118 to 4 ms p50; production numbers after deploy are pending.
+The second fetch cost the same as the first: the `immutable` header was not enough, Cloudflare does not cache Worker responses by itself, so every fetch re-rendered. Rendered PNGs now go into the Cache API. Locally (`wrangler dev`, n=10) that took the second fetch from 118 to 4 ms p50. On production, same run after the deploy (n=40):
+
+| step | p50 ms | p95 ms |
+|---|---|---|
+| POST /tickets | 73 | 107 |
+| GET image, first fetch | 247 | 496 |
+| GET image, second fetch | 191 | 284 |
+
+A smaller gain than local: 56 ms at p50, 212 ms at p95. The second fetch is still well above a POST (73 ms, about one round trip), so not every repeat is a cache hit. Cloudflare documents the Cache API for custom domains and does not say how it behaves on `*.workers.dev`; moving to a custom domain is the next thing to measure.
 
 ## Wiring it in Kapso
 
