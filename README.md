@@ -1,78 +1,85 @@
 # Quick Images MCP
 
-JSON in, PNG out: tickets and bar charts a WhatsApp agent can send. The agent sends the order data, over MCP or REST, and gets back an image URL it sends as an image message.
+JSON in, image URL out. An MCP server that gives WhatsApp agents tickets and bar charts: the agent sends the data, the server does the math and renders the PNG.
 
-Live: https://quick-images-mcp.fguespe.workers.dev
+[![Demo video](https://img.youtube.com/vi/tjG1KP2XuCc/hqdefault.jpg)](https://youtu.be/tjG1KP2XuCc)
 
-A prototype by Fabri Guespe.
+Live: https://quick-images-mcp.fguespe.workers.dev · A prototype by Fabri Guespe.
 
-## Why
+| Ticket | Chart |
+|---|---|
+| <img src="https://quick-images-mcp.fguespe.workers.dev/tickets/example.png" width="300"> | <img src="https://quick-images-mcp.fguespe.workers.dev/charts/example.png" width="300"> |
 
-WhatsApp agents can send images, but only from a URL that already exists. Image services that render HTML need an account and an HTML template written by the model. Here the LLM passes only data, a template renders it, and nothing needs setup.
+## Install
+
+**01 · Add the MCP server**
+
+```
+Name        Quick Images MCP
+Server URL  https://quick-images-mcp.fguespe.workers.dev/mcp
+Headers     { "Authorization": "Bearer <your key>" }
+```
+
+The client reads `render_ticket` and `render_chart` with their schemas from `tools/list`. Keys are issued by hand while this is a prototype: [ask for one](https://github.com/humanagent/quick-images-mcp/issues).
+
+**02 · One line per tool in the system prompt**
+
+```
+Tickets: call render_ticket and send the image_url as an image, with the caption "Order for <customer>. Total: $<total>" using the total the tool returns.
+```
+
+```
+Sales: find the tickets in this chat and in past chats. Call render_chart with one point per ticket (label: customer, value: total) and send it the same way, with the tool's total in the caption. If there are no tickets, say so. Sales and tickets are the same thing.
+```
 
 ## API
 
+The same tools over REST.
+
+```bash
+curl -X POST https://quick-images-mcp.fguespe.workers.dev/tickets \
+  -H 'authorization: Bearer $KEY' \
+  -H 'content-type: application/json' \
+  -d '{
+  "store": { "name": "Café Tortoni" },
+  "items": [
+    { "name": "Café con leche", "qty": 2, "price": 4200 },
+    { "name": "Medialunas",     "qty": 3, "price": 1500 }
+  ],
+  "taxRate": 0.21,
+  "payment": "Mercado Pago"
+}'
 ```
-POST /tickets
+
+```json
 {
-  "store": { "name": "Pizzería La Esquina" },
-  "items": [{ "name": "Muzza grande", "qty": 2, "price": 12500 }],
-  "currency": "ARS"
+  "image_url": "https://quick-images-mcp.fguespe.workers.dev/t/eyJzdG9y….png",
+  "totals": { "subtotal": 12900, "discount": 0, "tax": 2709, "total": 15609 }
 }
-
-→ 200 { "image_url": "https://quick-images-mcp.fguespe.workers.dev/t/<data>.png", "totals": { "subtotal": 25000, "discount": 0, "tax": 0, "total": 25000 } }
 ```
 
-Optional fields: `number`, `date`, `customer`, `discount`, `taxRate` (0 to <1), `payment`, `note`.
+Optional ticket fields: `number`, `date`, `customer`, `discount`, `note`. Up to 12 items.
 
-- The ticket is base64url-encoded in the image URL, so there is no storage and the PNG is cached as immutable.
-- **Every image URL is signed** (HMAC-SHA256 over kind + data, 16 bytes, `/t/<data>.<sig>.png`). Without it, anyone could edit the base64 and render a ticket with another total. Edited, unsigned or cross-kind URLs get a 403; the compare is constant time.
-- Totals are computed server side in integer cents. The model never does the math.
-- Up to 12 items; `image_url` must fit WhatsApp's 2048-character limit (413 otherwise).
-
-`GET /api/example` returns a sample ticket.
-
-### Charts
-
-```
-POST /charts
-{ "title": "Ventas de la semana", "currency": "ARS", "points": [{ "label": "Lun", "value": 182000 }, { "label": "Mar", "value": 156500 }] }
-
-→ 200 { "image_url": "https://quick-images-mcp.fguespe.workers.dev/c/<data>.png", "total": 338500 }
+```bash
+POST /charts  { "title": "Ventas", "currency": "ARS", "points": [{ "label": "Lun", "value": 182000 }] }
+→ { "image_url": "…/c/….png", "total": 182000 }
 ```
 
-A bar chart for backoffice questions (*"how did we sell this week?"*), up to 14 points, the highest bar in green. Example: `/charts/example.png`.
+Up to 14 points, the highest bar in green.
 
-### MCP server
+## How it works
 
-`POST /mcp` is an MCP server (Streamable HTTP, stateless JSON): `initialize`, `tools/list` and `tools/call` with `render_ticket` and `render_chart`, the same code as the REST routes. Point any MCP client at `https://quick-images-mcp.fguespe.workers.dev/mcp` with the header `Authorization: Bearer <key>`. Tool errors (bad input) come back as `isError` results the model can read and fix. Checked with the official MCP TypeScript client and in `npm run smoke`.
+- **No storage.** The data travels inside the image URL, so every PNG is cacheable forever.
+- **Signed URLs.** Each URL carries an HMAC of its data, so nobody can edit the base64 and render another total (403).
+- **The model never does math.** Totals are computed server side, in integer cents.
+- **Errors the model can fix.** Bad input is a 400 (an `isError` result over MCP); a URL past WhatsApp's 2,048 characters is a 413.
+- **Keys.** Creating an image needs `Authorization: Bearer <key>`; fetching one does not, since WhatsApp GETs it without headers. Only the key's SHA-256 is stored.
 
-### API keys
+Cloudflare Workers, Hono, workers-og (satori + resvg).
 
-Creating an image (`POST /tickets`, `POST /charts`, `POST /mcp`) needs `Authorization: Bearer <key>`; anything else is a 401. Fetching an image does not: WhatsApp GETs the PNG without headers, and those URLs are signed instead.
+## Numbers
 
-- `node scripts/new-key.mjs <name>` prints a new key once. KV stores only its SHA-256 with the name, so a dump of the namespace opens nothing.
-- The landing's Try it box calls `POST /tickets` without a key, allowed when the browser sends `Sec-Fetch-Site: same-origin`. A page script cannot set that header but curl can, so this is a demo convenience, not a security boundary. Rate limits per key are the next step.
-
-## Evals
-
-**Tool-call eval** (`evals/`): 22 owner messages (typos, "x2", words for numbers, English, an item not on the menu, a price override, sales questions, small talk) run through the same prompt, model (`claude-sonnet-5-5`, effort high) and tool schemas as the WhatsApp agent it was tested in. Each tool input is POSTed to the live service and the PNG fetched. Checks per ticket: accepted by the API, items exactly right, menu prices used, customer and payment carried, total right; per chart: the 7 days and the total.
-
-```
-ANTHROPIC_API_KEY=... node evals/run.mjs --runs 3
-```
-
-Results: not run yet (needs an Anthropic API key).
-
-**Render benchmark** (`node evals/bench.mjs`, no model): 40 unique tickets against production, from Buenos Aires, 2026-10-23, before the cache fix:
-
-| step | p50 ms | p95 ms |
-|---|---|---|
-| POST /tickets | 79 | 162 |
-| GET image, first fetch (render) | 279 | 531 |
-| GET image, second fetch | 288 | 537 |
-
-The second fetch cost the same as the first: the `immutable` header was not enough, Cloudflare does not cache Worker responses by itself, so every fetch re-rendered. Rendered PNGs now go into the Cache API. Locally (`wrangler dev`, n=10) that took the second fetch from 118 to 4 ms p50. On production, same run after the deploy (n=40):
+Render benchmark (`node evals/bench.mjs`, 40 tickets against production from Buenos Aires, 2026-10-23):
 
 | step | p50 ms | p95 ms |
 |---|---|---|
@@ -80,27 +87,15 @@ The second fetch cost the same as the first: the `immutable` header was not enou
 | GET image, first fetch | 247 | 496 |
 | GET image, second fetch | 191 | 284 |
 
-A smaller gain than local: 56 ms at p50, 212 ms at p95. The second fetch is still well above a POST (73 ms, about one round trip), so not every repeat is a cache hit. Cloudflare documents the Cache API for custom domains and does not say how it behaves on `*.workers.dev`; moving to a custom domain is the next thing to measure.
+Tool-call eval (`evals/`, 22 owner messages through the agent's prompt and schemas): written, not run yet.
 
-## Wiring it into an agent
+## Develop
 
-The landing has every field below with a Copy button (`/#install`).
-
-1. Add the MCP server: `https://quick-images-mcp.fguespe.workers.dev/mcp`, headers `{ "Authorization": "Bearer <key>" }`. The client reads both tools and their schemas from it.
-2. One line per tool in the system prompt (both on the landing): call the tool, send the `image_url` as an image, never compute totals.
-
-Webhook tools work too (`POST /tickets`, `POST /charts`, schemas on the landing), with the same header.
-
-## Stack
-
-Cloudflare Workers, Hono, workers-og (satori + resvg), Space Mono.
-
-```
+```bash
 npm install
 echo "SIGNING_KEY=$(openssl rand -hex 32)" > .dev.vars
 npm run dev
-node scripts/new-key.mjs smoke --local # prints a local key
-QI_KEY=<key> npm run smoke            # 22 checks against localhost: forged URLs, keys, MCP
-npx wrangler secret put SIGNING_KEY   # once, before the first deploy
+node scripts/new-key.mjs smoke --local   # prints a local key
+QI_KEY=<key> npm run smoke               # 22 checks
 npm run deploy
 ```
