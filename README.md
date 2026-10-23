@@ -43,6 +43,26 @@ POST /charts
 
 A bar chart for backoffice questions (*"how did we sell this week?"*), up to 14 points, the highest bar in green. Example: `/charts/example.png`.
 
+## Evals
+
+**Tool-call eval** (`evals/`): 22 owner messages (typos, "x2", words for numbers, English, an item not on the menu, a price override, sales questions, small talk) run through the same prompt, model (`claude-sonnet-5-5`, effort high) and tool schemas as the Kapso agent node. Each tool input is POSTed to the live service and the PNG fetched. Checks per ticket: accepted by the API, items exactly right, menu prices used, customer and payment carried, total right; per chart: the 7 days and the total.
+
+```
+ANTHROPIC_API_KEY=... node evals/run.mjs --runs 3
+```
+
+Results: not run yet (needs an API key).
+
+**Render benchmark** (`node evals/bench.mjs`, no model): 40 unique tickets against production, from Buenos Aires, 2026-10-23, before the cache fix:
+
+| step | p50 ms | p95 ms |
+|---|---|---|
+| POST /tickets | 79 | 162 |
+| GET image, first fetch (render) | 279 | 531 |
+| GET image, second fetch | 288 | 537 |
+
+The second fetch cost the same as the first: the `immutable` header was not enough, Cloudflare does not cache Worker responses by itself, so every fetch re-rendered. Rendered PNGs now go into the Cache API. Locally (`wrangler dev`, n=10) that took the second fetch from 118 to 4 ms p50; production numbers after deploy are pending.
+
 ## Wiring it in Kapso
 
 1. Workflow with a WhatsApp message trigger.

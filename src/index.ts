@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { ImageResponse, loadGoogleFont } from "workers-og";
 import { example, parseTicket, ticketHeight, ticketHtml, totals } from "./ticket";
 import { CHART_H, chartHtml, chartTotal, exampleChart, parseChart } from "./chart";
@@ -63,6 +63,17 @@ const loadFonts = () =>
     { name: "Space Mono", data: b, weight: 700, style: "normal" },
   ]));
 
+// Image URLs are immutable (the data is the URL), but Cloudflare does not cache
+// Worker responses on its own: without this, every WhatsApp fetch re-rendered.
+async function cached(c: Context, make: () => Promise<Response>) {
+  const cache = (caches as unknown as { default: Cache }).default;
+  const hit = await cache.match(c.req.raw);
+  if (hit) return hit;
+  const res = await make();
+  if (res.ok) c.executionCtx.waitUntil(cache.put(c.req.raw, res.clone()));
+  return res;
+}
+
 async function render(html: string, height: number) {
   return new ImageResponse(html, {
     width: 600,
@@ -100,7 +111,7 @@ app.get("/t/:data{.+\\.png}", async (c) => {
     const data = await verified(c.env.SIGNING_KEY, "t", c.req.param("data"));
     if (!data) return c.json({ error: "invalid signature" }, 403);
     const t = parseTicket(decode(data));
-    return await render(ticketHtml(t), ticketHeight(t));
+    return await cached(c, () => render(ticketHtml(t), ticketHeight(t)));
   } catch (e) {
     return c.json({ error: (e as Error).message }, 400);
   }
@@ -123,7 +134,8 @@ app.get("/c/:data{.+\\.png}", async (c) => {
   try {
     const data = await verified(c.env.SIGNING_KEY, "c", c.req.param("data"));
     if (!data) return c.json({ error: "invalid signature" }, 403);
-    return await render(chartHtml(parseChart(decode(data))), CHART_H);
+    const ch = parseChart(decode(data));
+    return await cached(c, () => render(chartHtml(ch), CHART_H));
   } catch (e) {
     return c.json({ error: (e as Error).message }, 400);
   }
