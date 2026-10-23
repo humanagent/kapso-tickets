@@ -490,10 +490,15 @@ async function render() {
   try { body = JSON.parse($("json").value); }
   catch (e) { $("preview").innerHTML = '<div class="err">invalid JSON: ' + e.message + '</div>'; $("status").textContent = ""; return; }
   const t0 = performance.now();
-  const r = await fetch("/tickets", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const data = await r.json();
-  if (!r.ok) { $("preview").innerHTML = '<div class="err">' + r.status + ": " + data.error + "</div>"; $("status").textContent = ""; return; }
+  const fail = (msg) => { $("preview").innerHTML = '<div class="err">' + msg + "</div>"; $("status").textContent = ""; };
+  let r, data;
+  try {
+    r = await fetch("/tickets", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    data = await r.json();
+  } catch (e) { return fail("request failed: " + (r ? r.status : e.message)); }
+  if (!r.ok) return fail(r.status + ": " + data.error);
   const img = new Image();
+  img.onerror = () => fail("the image did not load");
   img.onload = () => {
     $("preview").innerHTML = "";
     $("preview").append(img);
