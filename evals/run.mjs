@@ -7,7 +7,7 @@ import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { EFFORT, MENU, MODEL, SALES, SYSTEM, TOOLS } from "./agent.mjs";
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
-const BASE = arg("--base", "https://kapso-tickets.fguespe.workers.dev");
+const BASE = arg("--base", "https://quick-images-mcp.fguespe.workers.dev");
 const RUNS = Number(arg("--runs", "1"));
 const cases = JSON.parse(readFileSync(new URL("./cases.json", import.meta.url)));
 const client = new Anthropic();

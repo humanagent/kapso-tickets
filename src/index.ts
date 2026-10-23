@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { ImageResponse, loadGoogleFont } from "workers-og";
 import { example, parseTicket, ticketHeight, ticketHtml, totals } from "./ticket";
 import { CHART_H, chartHtml, chartTotal, exampleChart, parseChart } from "./chart";
+import { mcp } from "./mcp";
 
 const app = new Hono<{ Bindings: { SIGNING_KEY: string } }>();
 
@@ -85,9 +86,10 @@ async function render(html: string, height: number) {
 
 app.get("/api", async (c) =>
   c.json({
-    what: "Kapso Quick Images (prototype, not an official Kapso product): tickets and charts as PNGs for WhatsApp agents",
+    what: "Quick Images MCP (prototype, not an official Kapso product): tickets and charts as PNGs for WhatsApp agents",
     post: "POST /tickets with a ticket JSON -> { image_url, totals }",
     charts: "POST /charts with { title, points: [{ label, value }] } -> { image_url, total }",
+    mcp: "MCP server (Streamable HTTP): POST /mcp, tools render_ticket and render_chart",
     example: await imageUrl(c, "t", example),
   }),
 );
@@ -95,14 +97,31 @@ app.get("/api", async (c) =>
 app.get("/api/example", (c) => c.json(example));
 app.get("/api/example-chart", (c) => c.json(exampleChart));
 
+// Shared by the REST routes and the MCP tools.
+type Ctx = { req: { url: string }; env: { SIGNING_KEY: string } };
+class TooLarge extends Error {}
+
+async function makeTicket(c: Ctx, input: unknown) {
+  const t = parseTicket(input);
+  const image_url = await imageUrl(c, "t", t);
+  if (image_url.length > 2048) throw new TooLarge("ticket too large for a WhatsApp image_url");
+  return { image_url, totals: totals(t) };
+}
+
+async function makeChart(c: Ctx, input: unknown) {
+  const ch = parseChart(input);
+  const image_url = await imageUrl(c, "c", ch);
+  if (image_url.length > 2048) throw new TooLarge("chart too large for a WhatsApp image_url");
+  return { image_url, total: chartTotal(ch) };
+}
+
+const errorStatus = (e: unknown) => (e instanceof TooLarge ? 413 : 400);
+
 app.post("/tickets", async (c) => {
   try {
-    const t = parseTicket(await c.req.json());
-    const image_url = await imageUrl(c, "t", t);
-    if (image_url.length > 2048) return c.json({ error: "ticket too large for a WhatsApp image_url" }, 413);
-    return c.json({ image_url, totals: totals(t) });
+    return c.json(await makeTicket(c, await c.req.json()));
   } catch (e) {
-    return c.json({ error: (e as Error).message }, 400);
+    return c.json({ error: (e as Error).message }, errorStatus(e));
   }
 });
 
@@ -121,14 +140,18 @@ app.get("/charts/example.png", async (c) => c.redirect(await imageUrl(c, "c", ex
 
 app.post("/charts", async (c) => {
   try {
-    const ch = parseChart(await c.req.json());
-    const image_url = await imageUrl(c, "c", ch);
-    if (image_url.length > 2048) return c.json({ error: "chart too large for a WhatsApp image_url" }, 413);
-    return c.json({ image_url, total: chartTotal(ch) });
+    return c.json(await makeChart(c, await c.req.json()));
   } catch (e) {
-    return c.json({ error: (e as Error).message }, 400);
+    return c.json({ error: (e as Error).message }, errorStatus(e));
   }
 });
+
+app.all("/mcp", (c) =>
+  mcp(c.req.raw, {
+    render_ticket: (args) => makeTicket(c, args),
+    render_chart: (args) => makeChart(c, args),
+  }),
+);
 
 app.get("/c/:data{.+\\.png}", async (c) => {
   try {
