@@ -1,10 +1,10 @@
-# Tickets for Kapso agents
+# Kapso Quick Images
 
-JSON in, PNG out: tickets and bar charts. A WhatsApp agent sends the order data and gets back an image URL it can send with the Kapso image UI skill.
+JSON in, PNG out: tickets and bar charts a Kapso WhatsApp agent can send. A WhatsApp agent sends the order data and gets back an image URL it can send with the Kapso image UI skill.
 
 Live: https://kapso-tickets.fguespe.workers.dev
 
-A prototype by Fabri Guespe. Not an official Kapso product.
+A prototype by Fabri Guespe, built on Kapso Agent UI skills. Not an official Kapso product.
 
 ## Why
 

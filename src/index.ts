@@ -85,7 +85,7 @@ async function render(html: string, height: number) {
 
 app.get("/api", async (c) =>
   c.json({
-    what: "Renders a purchase ticket as a PNG for WhatsApp agents",
+    what: "Kapso Quick Images (prototype, not an official Kapso product): tickets and charts as PNGs for WhatsApp agents",
     post: "POST /tickets with a ticket JSON -> { image_url, totals }",
     charts: "POST /charts with { title, points: [{ label, value }] } -> { image_url, total }",
     example: await imageUrl(c, "t", example),
