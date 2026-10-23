@@ -30,6 +30,7 @@ const cr = await post("/charts", { title: "Semana", points: [{ label: "Lun", val
 const chart = await cr.json();
 check("POST /charts returns a signed url", cr.status === 200 && /\/c\/[\w-]+\.[\w-]{22}\.png$/.test(chart.image_url));
 check("signed chart renders", (await status(chart.image_url)) === 200);
+check("ticket example redirects to a signed url", (await status(`${base}/tickets/example.png`)) === 302);
 check("chart example redirects to a signed url", (await status(`${base}/charts/example.png`)) === 302);
 
 const bad = await post("/tickets", { store: { name: "x" }, items: [] });

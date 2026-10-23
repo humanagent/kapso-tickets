@@ -137,6 +137,7 @@ app.get("/t/:data{.+\\.png}", async (c) => {
 });
 
 app.get("/charts/example.png", async (c) => c.redirect(await imageUrl(c, "c", exampleChart)));
+app.get("/tickets/example.png", async (c) => c.redirect(await imageUrl(c, "t", example)));
 
 app.post("/charts", async (c) => {
   try {
